@@ -1,4 +1,3 @@
-const crypto = require("crypto");
 const { list, put } = require("@vercel/blob");
 
 function cors(res) {
@@ -9,18 +8,6 @@ function cors(res) {
 
 function fileOf(mode) {
   return mode === "hell" ? "hell.json" : "board.json";
-}
-
-function clientIp(req) {
-  const xff = req.headers["x-forwarded-for"];
-  const raw = (Array.isArray(xff) ? xff[0] : xff || "").split(",")[0].trim()
-    || req.headers["x-real-ip"]
-    || "";
-  return String(raw);
-}
-
-function ipKey(ip) {
-  return crypto.createHash("sha256").update(ip || "unknown").digest("hex").slice(0, 16);
 }
 
 function publish(rows) {
@@ -54,14 +41,13 @@ module.exports = async function handler(req, res) {
       const mode = body.mode === "hell" ? "hell" : "survive";
       const name = String(body.name || "無名").replace(/[<>]/g, "").trim().slice(0, 16) || "無名";
       const score = Math.min(999, Math.max(0, Math.floor(Number(body.score) || 0)));
-      const ip = ipKey(clientIp(req));
       const all = await rows(mode);
-      const idx = all.findIndex((r) => r.ip === ip);
+      const idx = all.findIndex((r) => r.name === name);
       if (idx >= 0) {
         if (score <= all[idx].score) return res.status(200).json(publish(all));
-        all[idx] = { name, score, t: Date.now(), ip };
+        all[idx] = { name, score, t: Date.now() };
       } else {
-        all.push({ name, score, t: Date.now(), ip });
+        all.push({ name, score, t: Date.now() });
       }
       all.sort((a, b) => b.score - a.score || a.t - b.t);
       const top = all.slice(0, 50);
