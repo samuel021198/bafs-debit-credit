@@ -141,9 +141,26 @@
 </head>
 <body>
   <main>
-    <section id="start">
+    <section id="gate">
       <h1>借方還是貸方？</h1>
-      <p class="sub">揀帳戶增加或減少喺借方定貸方。</p>
+      <p class="sub">先揀程度。</p>
+      <div class="modes">
+        <article class="mode">
+          <h2>初心者</h2>
+          <p>基礎帳戶：資產負債資本、費用收益、購貨銷貨</p>
+          <button id="pickBeginner" type="button">進入</button>
+        </article>
+        <article class="mode hell">
+          <h2>精英</h2>
+          <p>含應計、預付、退回退出、運費折扣等</p>
+          <button id="pickElite" type="button">進入</button>
+        </article>
+      </div>
+    </section>
+
+    <section id="start" class="hidden">
+      <h1>借方還是貸方？</h1>
+      <p class="sub"><span id="trackLabel">初心者</span>　揀帳戶增加或減少喺借方定貸方。</p>
       <div class="modes">
         <article class="mode">
           <h2>經典模式</h2>
@@ -170,6 +187,9 @@
           </div>
           <button class="ghost" id="openHellRanks" type="button" style="margin-top:8px">排行榜</button>
         </article>
+      </div>
+      <div class="stack">
+        <button class="ghost" id="backGate" type="button">返回選程度</button>
       </div>
     </section>
 
@@ -279,11 +299,24 @@
       ["存貨 Inventory", "asset"],
     ];
 
+    const ADVANCED = new Set([
+      "預付費用 Prepaid expenses",
+      "應計費用 Accrued expenses",
+      "預收收益 Unearned income",
+      "購貨運費 Carriage inwards",
+      "購貨退出 Returns outwards",
+      "購貨折扣 Discounts received",
+      "銷貨退回 Returns inwards",
+      "銷貨運費 Carriage outwards",
+      "銷貨折扣 Discounts allowed",
+    ]);
+
     const BOARD = "/api/board";
     const NICK = "bafs-dc-nick";
     const $ = (id) => document.getElementById(id);
 
     let mode = "quiz";
+    let track = "beginner";
     let queue = [], i = 0, score = 0, misses = [], locked = false;
     let tick = 0, to = 0, lastName = "", card = ["現金 Cash", "asset", "+"];
 
@@ -296,6 +329,18 @@
       localStorage.setItem(NICK, n);
       document.querySelectorAll(".nickShow").forEach((el) => { el.textContent = n; });
       return n;
+    }
+
+    function pool() {
+      return track === "beginner" ? BANK.filter((q) => !ADVANCED.has(q[0])) : BANK;
+    }
+
+    function boardUrl(kind) {
+      const p = new URLSearchParams();
+      if (kind === "hell") p.set("mode", "hell");
+      if (track === "beginner") p.set("track", "beginner");
+      const s = p.toString();
+      return BOARD + (s ? "?" + s : "");
     }
 
     function timed() {
@@ -357,7 +402,7 @@
 
     async function loadBoard(kind) {
       try {
-        const r = await fetch(BOARD + (kind === "hell" ? "?mode=hell" : ""), { cache: "no-store" });
+        const r = await fetch(boardUrl(kind), { cache: "no-store" });
         if (!r.ok) throw new Error("bad");
         const rows = await r.json();
         return Array.isArray(rows) ? rows : [];
@@ -367,7 +412,7 @@
     }
 
     async function paintRanks(kind) {
-      $("rankTitle").textContent = (kind === "hell" ? "地獄生存" : "生存模式") + "排行榜";
+      $("rankTitle").textContent = (track === "beginner" ? "初心者 · " : "精英 · ") + (kind === "hell" ? "地獄生存" : "生存模式");
       $("boardView").innerHTML = boardHtml(await loadBoard(kind));
     }
 
@@ -376,7 +421,7 @@
     }
 
     function show(id) {
-      ["start", "ranks", "play", "end"].forEach((s) => $(s).classList.toggle("hidden", s !== id));
+      ["gate", "start", "ranks", "play", "end"].forEach((s) => $(s).classList.toggle("hidden", s !== id));
     }
 
     function stopClock() {
@@ -402,7 +447,7 @@
     function nextCard() {
       if (mode === "quiz") return queue[i];
       let q;
-      do { q = BANK[Math.floor(Math.random() * BANK.length)]; }
+      do { q = pool()[Math.floor(Math.random() * pool().length)]; }
       while (q[0] === lastName && BANK.length > 1);
       lastName = q[0];
       const mark = Math.random() < 0.5 ? "+" : "-";
@@ -428,7 +473,7 @@
 
     function startQuiz() {
       mode = "quiz";
-      queue = mixMarks(shuffle(BANK).slice(0, 20));
+      queue = mixMarks(shuffle(pool()).slice(0, Math.min(20, pool().length)));
       i = 0; score = 0; misses = []; lastName = "";
       $("endRank").classList.add("hidden");
       show("play");
@@ -494,7 +539,7 @@
           await fetch(BOARD, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: nick(), score: score, mode: mode === "hell" ? "hell" : "survive" }),
+            body: JSON.stringify({ name: nick(), score: score, mode: mode === "hell" ? "hell" : "survive", track: track }),
           });
         } catch (_) {}
         await paintEndBoard();
@@ -509,7 +554,16 @@
       show("end");
     }
 
+    function enterTrack(t) {
+      track = t;
+      $("trackLabel").textContent = t === "beginner" ? "初心者" : "精英";
+      show("start");
+    }
+
     setNick(nick());
+    $("pickBeginner").onclick = () => enterTrack("beginner");
+    $("pickElite").onclick = () => enterTrack("elite");
+    $("backGate").onclick = () => show("gate");
     $("goQuiz").onclick = startQuiz;
     $("goSurvive").onclick = startSurvive;
     $("goHell").onclick = startHell;
