@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>借方還是貸方？</title>
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5b6778;
+      --paper: #efe8dc;
+      --card: #fffdf8;
+      --line: #e0d6c6;
+      --debit: #c45c26;
+      --debit-bg: #fbe6d8;
+      --credit: #1e5f8a;
+      --credit-bg: #d9ebf7;
+      --ok: #1f7a4d;
+      --bad: #b42318;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      min-height: 100dvh;
+      font-family: "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: min(430px, 100%);
+      margin: 0 auto;
+      padding: max(12px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+    }
+    h1 { font-size: 1.55rem; margin: .2rem 0 .35rem; letter-spacing: .02em; }
+    .sub { margin: 0 0 1rem; color: var(--muted); font-size: .95rem; line-height: 1.45; }
+    .modes { display: flex; flex-direction: column; gap: 12px; }
+    .mode {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 1px 0 var(--line);
+    }
+    .mode h2 { margin: 0 0 4px; font-size: 1.2rem; }
+    .mode p { margin: 0 0 12px; color: var(--muted); font-size: .88rem; }
+    .who { margin: 0 0 12px; font-size: 1rem; }
+    .who b { color: var(--debit); }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: 0;
+      border-radius: 14px;
+      min-height: 52px;
+      padding: .75rem 1rem;
+      background: var(--ink);
+      color: #fff;
+      width: 100%;
+      font-weight: 700;
+    }
+    button.ghost {
+      background: #fff;
+      color: var(--ink);
+      border: 1.5px solid var(--line);
+    }
+    .split { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+    .rank {
+      margin-top: 16px;
+      background: var(--card);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .rank h2 { margin: 0 0 8px; font-size: 1.05rem; }
+    .rank ol { margin: 0; padding: 0; list-style: none; }
+    .rank li {
+      display: grid;
+      grid-template-columns: 1.6rem 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+      font-size: 1rem;
+    }
+    .rank li:first-child { border-top: 0; }
+    .rank li.empty { display: block; color: var(--muted); }
+    .rank .n { color: var(--muted); }
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: .7rem;
+      font-size: .95rem;
+    }
+    #timer { font-weight: 800; color: var(--debit); }
+    .t {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: min(58dvh, 420px);
+      border: 3px solid var(--ink);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--card);
+    }
+    .t header {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 1rem .75rem;
+      border-bottom: 3px solid var(--ink);
+      background: #fff;
+    }
+    .t header strong { display: block; font-size: 1.25rem; line-height: 1.35; }
+    .t header span { color: var(--muted); font-size: .9rem; }
+    .side {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .3rem;
+      min-height: 140px;
+      font-size: 1.15rem;
+      font-weight: 800;
+    }
+    .left { background: var(--debit-bg); color: var(--debit); border-right: 3px solid var(--ink); }
+    .right { background: var(--credit-bg); color: var(--credit); }
+    .side small { font-weight: 500; }
+    .flash-ok { outline: 6px solid var(--ok); outline-offset: -6px; }
+    .flash-bad { outline: 6px solid var(--bad); outline-offset: -6px; }
+    .msg { min-height: 1.6rem; margin: .8rem 0 0; font-weight: 700; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    .endbox { background: var(--card); border-radius: 16px; padding: 16px; margin: 12px 0; }
+    .endbox ul, .endbox ol { margin: .4rem 0 0; padding-left: 1.2rem; }
+    .stack { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="start">
+      <h1>借方還是貸方？</h1>
+      <p class="sub">帳戶的「+」在左邊（借）還是右邊（貸）？</p>
+      <div class="modes">
+        <article class="mode">
+          <h2>休閒模式</h2>
+          <p>10 題 · 不限時</p>
+          <button id="goQuiz" type="button">開始</button>
+        </article>
+        <article class="mode">
+          <h2>生存模式</h2>
+          <p>答錯或逾時即終局 · 越玩越快</p>
+          <p class="who">名稱：<b id="nickShow">無名</b></p>
+          <div class="split">
+            <button class="ghost" id="rename" type="button">改名</button>
+            <button id="goSurvive" type="button">開始玩</button>
+          </div>
+        </article>
+      </div>
+      <div class="rank">
+        <h2>排行榜</h2>
+        <ol id="boardStart"></ol>
+      </div>
+    </section>
+
+    <section id="play" class="hidden">
+      <div class="hud">
+        <span id="progress">第 1 題</span>
+        <span id="score">連對 0</span>
+        <span id="timer"></span>
+      </div>
+      <div class="t">
+        <header>
+          <strong id="name">現金 Cash</strong>
+          <span id="prompt">「+」（增加）在哪一邊？</span>
+        </header>
+        <button class="side left" id="pickD" type="button">借方<small>左 +</small></button>
+        <button class="side right" id="pickC" type="button">貸方<small>右 +</small></button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </section>
+
+    <section id="end" class="hidden">
+      <h1 id="final">完成</h1>
+      <div class="endbox">
+        <p id="reviewTitle">錯題重溫</p>
+        <ul id="misses"></ul>
+      </div>
+      <div class="rank" id="endRank">
+        <h2>排行榜</h2>
+        <ol id="boardEnd"></ol>
+      </div>
+      <div class="stack">
+        <button id="again" type="button">再玩一次</button>
+        <button class="ghost" id="home" type="button">返回主頁</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    const KIND = {
+      asset: { label: "資產 Asset", plus: "D" },
+      drawing: { label: "提用 Drawings", plus: "D" },
+      expense: { label: "費用 Expense", plus: "D" },
+      capital: { label: "資本 Capital", plus: "C" },
+      liability: { label: "負債 Liability", plus: "C" },
+      income: { label: "收益 Income", plus: "C" },
+    };
+
+    const BANK = [
+      ["資產帳戶（類別）", "asset"],
+      ["資本帳戶（類別）", "capital"],
+      ["負債帳戶（類別）", "liability"],
+      ["提用帳戶（類別）", "drawing"],
+      ["費用帳戶（類別）", "expense"],
+      ["收益帳戶（類別）", "income"],
+      ["現金 Cash", "asset"],
+      ["銀行存款 Bank", "asset"],
+      ["定期存款 Term deposit", "asset"],
+      ["辦公室設備 Office equipment", "asset"],
+      ["機器 Machinery", "asset"],
+      ["家具 Furniture", "asset"],
+      ["應收帳款 Accounts receivables", "asset"],
+      ["付予供應商的訂金 Deposit to suppliers", "asset"],
+      ["貸款予馬克 Loan to Mark", "asset"],
+      ["預付費用 Prepaid expenses", "asset"],
+      ["資本 Capital", "capital"],
+      ["銀行貸款 Bank loan", "liability"],
+      ["應付帳款 Accounts payables", "liability"],
+      ["客戶的訂金 Deposit from customers", "liability"],
+      ["應計費用 Accrued expenses", "liability"],
+      ["預收收益 Unearned income", "liability"],
+      ["瑪麗父親的貸款 Loan from Mary’s father", "liability"],
+      ["提用 Drawings", "drawing"],
+      ["租金費用 Rental expenses", "expense"],
+      ["薪金 Salaries", "expense"],
+      ["電費 Electricity", "expense"],
+      ["管理費 Management fee", "expense"],
+      ["銀行手續費 Bank charges", "expense"],
+      ["文具費用 Stationery expenses", "expense"],
+      ["服務費收益 Service fee revenue", "income"],
+      ["租金收益 Rental income", "income"],
+      ["利息收益 Interest income", "income"],
+      ["佣金收益 Commission income", "income"],
+    ];
+
+    const KEY = "bafs-dc-board";
+    const NICK = "bafs-dc-nick";
+    const $ = (id) => document.getElementById(id);
+
+    let mode = "quiz";
+    let queue = [], i = 0, score = 0, misses = [], locked = false;
+    let tick = 0, to = 0, lastName = "", card = BANK[0];
+
+    function nick() {
+      return (localStorage.getItem(NICK) || "無名").slice(0, 16);
+    }
+
+    function setNick(n) {
+      n = (n || "").trim().slice(0, 16) || "無名";
+      localStorage.setItem(NICK, n);
+      $("nickShow").textContent = n;
+      return n;
+    }
+
+    function shuffle(a) {
+      a = a.slice();
+      for (let k = a.length - 1; k > 0; k--) {
+        const j = Math.floor(Math.random() * (k + 1));
+        [a[k], a[j]] = [a[j], a[k]];
+      }
+      return a;
+    }
+
+    function limit(n) {
+      if (n < 20) return 10;
+      if (n < 40) return 8;
+      if (n < 60) return 6;
+      return 4;
+    }
+
+    function loadBoard() {
+      try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
+      catch { return []; }
+    }
+
+    function boardHtml() {
+      const rows = loadBoard();
+      if (!rows.length) return "<li class=\"empty\">尚未有紀錄</li>";
+      return rows.map((r, idx) =>
+        "<li><span class=\"n\">" + (idx + 1) + "</span><span>" + r.name + "</span><b>" + r.score + " 題</b></li>"
+      ).join("");
+    }
+
+    function paintBoards() {
+      $("boardStart").innerHTML = boardHtml();
+      $("boardEnd").innerHTML = boardHtml();
+    }
+
+    function show(id) {
+      ["start", "play", "end"].forEach((s) => $(s).classList.toggle("hidden", s !== id));
+      if (id === "start") paintBoards();
+    }
+
+    function stopClock() {
+      clearInterval(tick);
+      clearTimeout(to);
+    }
+
+    function startClock() {
+      stopClock();
+      if (mode !== "survive") {
+        $("timer").textContent = "";
+        return;
+      }
+      const sec = limit(i);
+      const endAt = Date.now() + sec * 1000;
+      $("timer").textContent = sec + " 秒";
+      tick = setInterval(() => {
+        $("timer").textContent = Math.max(0, Math.ceil((endAt - Date.now()) / 1000)) + " 秒";
+      }, 100);
+      to = setTimeout(() => pick("timeout"), sec * 1000);
+    }
+
+    function nextCard() {
+      if (mode === "quiz") return queue[i];
+      let q;
+      do { q = BANK[Math.floor(Math.random() * BANK.length)]; }
+      while (q[0] === lastName && BANK.length > 1);
+      lastName = q[0];
+      return q;
+    }
+
+    function render() {
+      card = nextCard();
+      $("name").textContent = card[0];
+      $("progress").textContent = mode === "quiz" ? (i + 1) + " / 10" : "第 " + (i + 1) + " 題";
+      $("score").textContent = (mode === "quiz" ? "分數 " : "連對 ") + score;
+      $("msg").textContent = "";
+      $("msg").className = "msg";
+      $("pickD").classList.remove("flash-ok", "flash-bad");
+      $("pickC").classList.remove("flash-ok", "flash-bad");
+      locked = false;
+      startClock();
+    }
+
+    function startQuiz() {
+      mode = "quiz";
+      queue = shuffle(BANK).slice(0, 10);
+      i = 0; score = 0; misses = []; lastName = "";
+      $("endRank").classList.add("hidden");
+      show("play");
+      render();
+    }
+
+    function startSurvive() {
+      setNick(nick());
+      mode = "survive";
+      i = 0; score = 0; misses = []; lastName = "";
+      $("endRank").classList.remove("hidden");
+      show("play");
+      render();
+    }
+
+    function pick(side) {
+      if (locked) return;
+      locked = true;
+      stopClock();
+      const plus = KIND[card[1]].plus;
+      const plusName = plus === "D" ? "借方（左 +）" : "貸方（右 +）";
+      const ok = side === plus;
+      if (ok) {
+        score++;
+        (side === "D" ? $("pickD") : $("pickC")).classList.add("flash-ok");
+        $("msg").textContent = "正確：" + KIND[card[1]].label;
+        $("msg").className = "msg ok";
+      } else {
+        if (side === "D") $("pickD").classList.add("flash-bad");
+        else if (side === "C") $("pickC").classList.add("flash-bad");
+        (plus === "D" ? $("pickD") : $("pickC")).classList.add("flash-ok");
+        $("msg").textContent = (side === "timeout" ? "時間到 · " : "") + "應選" + plusName;
+        $("msg").className = "msg bad";
+        misses.push(card[0] + " → " + KIND[card[1]].label + " → " + plusName);
+      }
+      $("score").textContent = (mode === "quiz" ? "分數 " : "連對 ") + score;
+      const die = mode === "survive" && !ok;
+      setTimeout(() => {
+        if (die) return finish();
+        i++;
+        if (mode === "quiz" && i >= 10) finish();
+        else render();
+      }, ok ? 450 : 900);
+    }
+
+    function finish() {
+      stopClock();
+      if (mode === "survive") {
+        const rows = loadBoard();
+        rows.push({ name: nick(), score: score });
+        rows.sort((a, b) => b.score - a.score);
+        localStorage.setItem(KEY, JSON.stringify(rows.slice(0, 20)));
+        $("final").textContent = "連對 " + score + " 題";
+        $("reviewTitle").textContent = "最後一題";
+        $("misses").innerHTML = misses.length
+          ? "<li>" + misses[misses.length - 1] + "</li>"
+          : "";
+        $("endRank").classList.remove("hidden");
+        paintBoards();
+      } else {
+        $("final").textContent = "得分 " + score + " / 10";
+        $("reviewTitle").textContent = "錯題重溫";
+        $("misses").innerHTML = misses.length
+          ? misses.map((m) => "<li>" + m + "</li>").join("")
+          : "<li>全對</li>";
+        $("endRank").classList.add("hidden");
+      }
+      show("end");
+    }
+
+    setNick(nick());
+    paintBoards();
+    $("goQuiz").onclick = startQuiz;
+    $("goSurvive").onclick = startSurvive;
+    $("rename").onclick = () => {
+      const n = prompt("生存模式名稱", nick());
+      if (n !== null) setNick(n);
+    };
+    $("again").onclick = () => mode === "survive" ? startSurvive() : startQuiz();
+    $("home").onclick = () => { stopClock(); show("start"); };
+    $("pickD").onclick = () => pick("D");
+    $("pickC").onclick = () => pick("C");
+
+    [["asset","D"],["drawing","D"],["expense","D"],["capital","C"],["liability","C"],["income","C"]]
+      .forEach(([k, s]) => { if (KIND[k].plus !== s) throw new Error(k); });
+  </script>
+</body>
+</html>
