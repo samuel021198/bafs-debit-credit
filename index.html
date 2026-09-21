@@ -156,7 +156,7 @@
         </article>
       </div>
       <div class="rank">
-        <h2>排行榜</h2>
+        <h2>共用排行榜</h2>
         <ol id="boardStart"></ol>
       </div>
     </section>
@@ -185,7 +185,7 @@
         <ul id="misses"></ul>
       </div>
       <div class="rank" id="endRank">
-        <h2>排行榜</h2>
+        <h2>共用排行榜</h2>
         <ol id="boardEnd"></ol>
       </div>
       <div class="stack">
@@ -241,7 +241,7 @@
       ["佣金收益 Commission income", "income"],
     ];
 
-    const KEY = "bafs-dc-board";
+    const BOARD = "/api/board";
     const NICK = "bafs-dc-nick";
     const $ = (id) => document.getElementById(id);
 
@@ -276,22 +276,33 @@
       return 4;
     }
 
-    function loadBoard() {
-      try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
-      catch { return []; }
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     }
 
-    function boardHtml() {
-      const rows = loadBoard();
+    function boardHtml(rows) {
+      if (!rows) return "<li class=\"empty\">排行榜連線失敗</li>";
       if (!rows.length) return "<li class=\"empty\">尚未有紀錄</li>";
-      return rows.map((r, idx) =>
-        "<li><span class=\"n\">" + (idx + 1) + "</span><span>" + r.name + "</span><b>" + r.score + " 題</b></li>"
+      return rows.slice(0, 20).map((r, idx) =>
+        "<li><span class=\"n\">" + (idx + 1) + "</span><span>" + esc(r.name) + "</span><b>" + r.score + " 題</b></li>"
       ).join("");
     }
 
-    function paintBoards() {
-      $("boardStart").innerHTML = boardHtml();
-      $("boardEnd").innerHTML = boardHtml();
+    async function loadBoard() {
+      try {
+        const r = await fetch(BOARD, { cache: "no-store" });
+        if (!r.ok) throw new Error("bad");
+        const rows = await r.json();
+        return Array.isArray(rows) ? rows : [];
+      } catch {
+        return null;
+      }
+    }
+
+    async function paintBoards() {
+      const rows = await loadBoard();
+      $("boardStart").innerHTML = boardHtml(rows);
+      $("boardEnd").innerHTML = boardHtml(rows);
     }
 
     function show(id) {
@@ -389,20 +400,23 @@
       }, ok ? 450 : 900);
     }
 
-    function finish() {
+    async function finish() {
       stopClock();
       if (mode === "survive") {
-        const rows = loadBoard();
-        rows.push({ name: nick(), score: score });
-        rows.sort((a, b) => b.score - a.score);
-        localStorage.setItem(KEY, JSON.stringify(rows.slice(0, 20)));
         $("final").textContent = "連對 " + score + " 題";
         $("reviewTitle").textContent = "最後一題";
         $("misses").innerHTML = misses.length
           ? "<li>" + misses[misses.length - 1] + "</li>"
           : "";
         $("endRank").classList.remove("hidden");
-        paintBoards();
+        try {
+          await fetch(BOARD, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: nick(), score: score }),
+          });
+        } catch (_) {}
+        await paintBoards();
       } else {
         $("final").textContent = "得分 " + score + " / 10";
         $("reviewTitle").textContent = "錯題重溫";
