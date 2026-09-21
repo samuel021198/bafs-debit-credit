@@ -146,45 +146,37 @@
       <p class="sub">揀帳戶增加或減少喺借方定貸方。</p>
       <div class="modes">
         <article class="mode">
-          <h2>休閒模式</h2>
-          <p>10 題 · 問「+」· 不限時</p>
+          <h2>經典模式</h2>
+          <p>20 題 · 加減混合 · 不限時</p>
           <button id="goQuiz" type="button">開始</button>
         </article>
         <article class="mode">
           <h2>生存模式</h2>
-          <p>問「+」（增加）· 答錯或逾時即終局</p>
+          <p>問「+」· 答錯或逾時即終局</p>
           <p class="who">名稱：<b class="nickShow">無名</b></p>
           <div class="split">
             <button class="ghost" id="rename" type="button">改名</button>
             <button id="goSurvive" type="button">開始玩</button>
           </div>
+          <button class="ghost" id="openSurviveRanks" type="button" style="margin-top:8px">排行榜</button>
         </article>
         <article class="mode hell">
           <h2>地獄生存</h2>
-          <p>問「-」（減少，即「+」嘅對面）· 規則同生存</p>
+          <p>加減混合 · 規則同生存</p>
           <p class="who">名稱：<b class="nickShow">無名</b></p>
           <div class="split">
             <button class="ghost" id="renameHell" type="button">改名</button>
             <button id="goHell" type="button">開始玩</button>
           </div>
-        </article>
-        <article class="mode">
-          <h2>排行榜</h2>
-          <p>生存同地獄分開兩張榜</p>
-          <button class="ghost" id="openRanks" type="button">查看排行榜</button>
+          <button class="ghost" id="openHellRanks" type="button" style="margin-top:8px">排行榜</button>
         </article>
       </div>
     </section>
 
     <section id="ranks" class="hidden">
-      <h1>排行榜</h1>
+      <h1 id="rankTitle">排行榜</h1>
       <div class="rank">
-        <h2>生存模式</h2>
-        <ol id="boardSurvive"></ol>
-      </div>
-      <div class="rank">
-        <h2>地獄生存</h2>
-        <ol id="boardHell"></ol>
+        <ol id="boardView"></ol>
       </div>
       <div class="stack">
         <button class="ghost" id="backRanks" type="button">返回主頁</button>
@@ -277,7 +269,7 @@
 
     let mode = "quiz";
     let queue = [], i = 0, score = 0, misses = [], locked = false;
-    let tick = 0, to = 0, lastName = "", card = BANK[0];
+    let tick = 0, to = 0, lastName = "", card = ["現金 Cash", "asset", "+"];
 
     function nick() {
       return (localStorage.getItem(NICK) || "無名").slice(0, 16);
@@ -294,13 +286,18 @@
       return mode === "survive" || mode === "hell";
     }
 
-    function askMinus() {
-      return mode === "hell";
+    function markOf() {
+      return card[2] === "-" ? "-" : "+";
     }
 
-    function targetSide(plus) {
-      if (!askMinus()) return plus;
-      return plus === "D" ? "C" : "D";
+    function targetSide(plus, mark) {
+      mark = mark || markOf();
+      return mark === "-" ? (plus === "D" ? "C" : "D") : plus;
+    }
+
+    function mixMarks(list) {
+      const marks = shuffle(list.map((_, n) => n < Math.ceil(list.length / 2) ? "+" : "-"));
+      return list.map((q, n) => [q[0], q[1], marks[n]]);
     }
 
     function sideLabel(side, mark) {
@@ -347,16 +344,17 @@
       }
     }
 
-    async function paintBoards() {
-      const [survive, hell] = await Promise.all([loadBoard("survive"), loadBoard("hell")]);
-      $("boardSurvive").innerHTML = boardHtml(survive);
-      $("boardHell").innerHTML = boardHtml(hell);
-      $("boardEnd").innerHTML = boardHtml(mode === "hell" ? hell : survive);
+    async function paintRanks(kind) {
+      $("rankTitle").textContent = (kind === "hell" ? "地獄生存" : "生存模式") + "排行榜";
+      $("boardView").innerHTML = boardHtml(await loadBoard(kind));
+    }
+
+    async function paintEndBoard() {
+      $("boardEnd").innerHTML = boardHtml(await loadBoard(mode === "hell" ? "hell" : "survive"));
     }
 
     function show(id) {
       ["start", "ranks", "play", "end"].forEach((s) => $(s).classList.toggle("hidden", s !== id));
-      if (id === "ranks") paintBoards();
     }
 
     function stopClock() {
@@ -385,17 +383,18 @@
       do { q = BANK[Math.floor(Math.random() * BANK.length)]; }
       while (q[0] === lastName && BANK.length > 1);
       lastName = q[0];
-      return q;
+      const mark = mode === "hell" ? (Math.random() < 0.5 ? "+" : "-") : "+";
+      return [q[0], q[1], mark];
     }
 
     function render() {
       card = nextCard();
-      const mark = askMinus() ? "-" : "+";
-      $("prompt").textContent = askMinus() ? "「-」（減少）在哪一邊？" : "「+」（增加）在哪一邊？";
+      const mark = markOf();
+      $("prompt").textContent = mark === "-" ? "「-」（減少）在哪一邊？" : "「+」（增加）在哪一邊？";
       $("pickD").innerHTML = "借方<small>左 " + mark + "</small>";
       $("pickC").innerHTML = "貸方<small>右 " + mark + "</small>";
       $("name").textContent = card[0];
-      $("progress").textContent = mode === "quiz" ? (i + 1) + " / 10" : "第 " + (i + 1) + " 題";
+      $("progress").textContent = mode === "quiz" ? (i + 1) + " / 20" : "第 " + (i + 1) + " 題";
       $("score").textContent = (mode === "quiz" ? "分數 " : "連對 ") + score;
       $("msg").textContent = "";
       $("msg").className = "msg";
@@ -407,7 +406,7 @@
 
     function startQuiz() {
       mode = "quiz";
-      queue = shuffle(BANK).slice(0, 10);
+      queue = mixMarks(shuffle(BANK).slice(0, 20));
       i = 0; score = 0; misses = []; lastName = "";
       $("endRank").classList.add("hidden");
       show("play");
@@ -432,8 +431,8 @@
       locked = true;
       stopClock();
       const plus = KIND[card[1]].plus;
-      const want = targetSide(plus);
-      const mark = askMinus() ? "-" : "+";
+      const mark = markOf();
+      const want = targetSide(plus, mark);
       const wantName = sideLabel(want, mark);
       const ok = side === want;
       if (ok) {
@@ -454,7 +453,7 @@
       setTimeout(() => {
         if (die) return finish();
         i++;
-        if (mode === "quiz" && i >= 10) finish();
+        if (mode === "quiz" && i >= 20) finish();
         else render();
       }, ok ? 450 : 900);
     }
@@ -476,9 +475,9 @@
             body: JSON.stringify({ name: nick(), score: score, mode: mode === "hell" ? "hell" : "survive" }),
           });
         } catch (_) {}
-        await paintBoards();
+        await paintEndBoard();
       } else {
-        $("final").textContent = "得分 " + score + " / 10";
+        $("final").textContent = "得分 " + score + " / 20";
         $("reviewTitle").textContent = "錯題重溫";
         $("misses").innerHTML = misses.length
           ? misses.map((m) => "<li>" + m + "</li>").join("")
@@ -498,7 +497,8 @@
     };
     $("rename").onclick = doRename;
     $("renameHell").onclick = doRename;
-    $("openRanks").onclick = () => show("ranks");
+    $("openSurviveRanks").onclick = () => { show("ranks"); paintRanks("survive"); };
+    $("openHellRanks").onclick = () => { show("ranks"); paintRanks("hell"); };
     $("backRanks").onclick = () => show("start");
     $("again").onclick = () => {
       if (mode === "hell") startHell();
@@ -509,11 +509,7 @@
     $("pickD").onclick = () => pick("D");
     $("pickC").onclick = () => pick("C");
 
-    if (targetSide("D") !== "D" || targetSide("C") !== "C") throw new Error("plus");
-    mode = "hell";
-    if (targetSide("D") !== "C" || targetSide("C") !== "D") throw new Error("hell");
-    mode = "quiz";
-
+    if (targetSide("D", "+") !== "D" || targetSide("D", "-") !== "C" || targetSide("C", "-") !== "D") throw new Error("mix");
     [["asset","D"],["drawing","D"],["expense","D"],["capital","C"],["liability","C"],["income","C"]]
       .forEach(([k, s]) => { if (KIND[k].plus !== s) throw new Error(k); });
   </script>
