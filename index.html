@@ -152,7 +152,7 @@
         </article>
         <article class="mode">
           <h2>生存模式</h2>
-          <p>問「+」· 答錯或逾時即終局</p>
+          <p>加減混合 · 頭20題20秒，其後15／10／5秒</p>
           <p class="who">名稱：<b class="nickShow">無名</b></p>
           <div class="split">
             <button class="ghost" id="rename" type="button">改名</button>
@@ -224,6 +224,11 @@
       capital: { label: "資本 Capital", plus: "C" },
       liability: { label: "負債 Liability", plus: "C" },
       income: { label: "收益 Income", plus: "C" },
+      purchases: { label: "購貨 Purchases", plus: "D" },
+      carriageIn: { label: "購貨運費 Carriage inwards", plus: "D" },
+      purchaseReturn: { label: "購貨退出 Returns outwards", plus: "C" },
+      sales: { label: "銷貨 Sales", plus: "C" },
+      salesReturn: { label: "銷貨退回 Returns inwards", plus: "D" },
     };
 
     const BANK = [
@@ -261,6 +266,17 @@
       ["租金收益 Rental income", "income"],
       ["利息收益 Interest income", "income"],
       ["佣金收益 Commission income", "income"],
+      ["購貨 Purchases", "purchases"],
+      ["購貨運費 Carriage inwards", "carriageIn"],
+      ["購貨退出 Returns outwards", "purchaseReturn"],
+      ["購貨折扣 Discounts received", "income"],
+      ["銷貨 Sales", "sales"],
+      ["銷貨退回 Returns inwards", "salesReturn"],
+      ["銷貨運費 Carriage outwards", "expense"],
+      ["銷貨折扣 Discounts allowed", "expense"],
+      ["應收貨款 Trade receivables", "asset"],
+      ["應付貨款 Trade payables", "liability"],
+      ["存貨 Inventory", "asset"],
     ];
 
     const BOARD = "/api/board";
@@ -315,6 +331,12 @@
     }
 
     function limit(n) {
+      if (mode === "survive") {
+        if (n < 20) return 20;
+        if (n < 40) return 15;
+        if (n < 80) return 10;
+        return 5;
+      }
       if (n < 20) return 10;
       if (n < 40) return 8;
       if (n < 60) return 6;
@@ -383,7 +405,7 @@
       do { q = BANK[Math.floor(Math.random() * BANK.length)]; }
       while (q[0] === lastName && BANK.length > 1);
       lastName = q[0];
-      const mark = mode === "hell" ? (Math.random() < 0.5 ? "+" : "-") : "+";
+      const mark = Math.random() < 0.5 ? "+" : "-";
       return [q[0], q[1], mark];
     }
 
@@ -510,8 +532,15 @@
     $("pickC").onclick = () => pick("C");
 
     if (targetSide("D", "+") !== "D" || targetSide("D", "-") !== "C" || targetSide("C", "-") !== "D") throw new Error("mix");
+    [["purchases","D"],["carriageIn","D"],["purchaseReturn","C"],["sales","C"],["salesReturn","D"]]
+      .forEach(([k, s]) => { if (KIND[k].plus !== s) throw new Error(k); });
     [["asset","D"],["drawing","D"],["expense","D"],["capital","C"],["liability","C"],["income","C"]]
       .forEach(([k, s]) => { if (KIND[k].plus !== s) throw new Error(k); });
+    (function () {
+      const m = mode; mode = "survive";
+      if (limit(0) !== 20 || limit(19) !== 20 || limit(20) !== 15 || limit(39) !== 15 || limit(40) !== 10 || limit(79) !== 10 || limit(80) !== 5) throw new Error("slim");
+      mode = m;
+    })();
   </script>
 </body>
 </html>
