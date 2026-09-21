@@ -8,7 +8,9 @@ function cors(res) {
 
 async function rows() {
   const { blobs } = await list({ prefix: "board.json" });
-  const hit = blobs.find((b) => b.pathname === "board.json");
+  const hit = blobs
+    .filter((b) => b.pathname === "board.json")
+    .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
   if (!hit) return [];
   const r = await fetch(hit.url, { cache: "no-store" });
   if (!r.ok) return [];
@@ -18,6 +20,7 @@ async function rows() {
 
 module.exports = async function handler(req, res) {
   cors(res);
+  res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.status(204).end();
   try {
     if (req.method === "GET") return res.status(200).json(await rows());
